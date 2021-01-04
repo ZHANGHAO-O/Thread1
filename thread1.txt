@@ -1,0 +1,251 @@
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class Executors的使用 {
+    public static void main(String[] args) {
+        ExecutorService t1 = Executors.newCachedThreadPool();
+        ExecutorService t2 = Executors.newFixedThreadPool(10);
+        ExecutorService t3 = Executors.newSingleThreadExecutor();
+    }
+}
+import java.util.Timer;
+import java.util.TimerTask;
+
+public class 使用Java中的定时器 {
+    public static void main(String[] args)throws InterruptedException {
+        // TimerTask  让定时器去运行的任务
+        //Timer 定时器
+
+        TimerTask task = new TimerTask() {
+            @Override
+            public void run() {
+                System.out.println("1");
+            }
+        };
+
+        Timer timer = new Timer();
+        //timer.schedule(task,5000);
+        timer.scheduleAtFixedRate(task,5000,3000);
+        while (true){
+            System.out.println("2");
+            Thread.sleep(500);
+        }
+    }
+}
+import java.util.Scanner;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+public class 修改计算斐波那契数列 {
+    private static long fib(int n){
+        if (n<=1){
+            return n;
+        }
+        return fib(n-1)+fib(n-2);
+    }
+    static class CalcTask implements Runnable{
+        private final int n ;
+        CalcTask(int n){
+            this.n = n;
+        }
+
+        @Override
+        public void run() {
+            long fib = fib(n);
+            System.out.printf("fib(%d)=%d\n",n,fib);
+        }
+    }
+
+    public static void main(String[] args) {
+        ExecutorService threadPool = Executors.newCachedThreadPool();
+        Scanner sc = new Scanner(System.in);
+        while (sc.hasNext()){
+            int n = sc.nextInt();
+            Runnable task = new CalcTask(n);
+            threadPool.execute(task);
+        }
+        threadPool.shutdown();
+    }
+}
+public class 定时器实现最简单版本 {
+    static abstract class TimerTask{
+        protected abstract void run();
+    }
+    static class Timer{
+        public void schedule(TimerTask task,long dalay){
+            Thread thread = new Thread(){
+               @Override
+               public void run(){
+                   try{
+                       Thread.sleep(dalay);
+                       task.run();
+                   }catch (InterruptedException e){
+
+                   }
+               }
+            };
+            thread.start();
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException{
+        Timer timer = new Timer();
+        timer.schedule(new TimerTask() {
+            @Override
+            protected void run() {
+                System.out.println("时间到了，该起床了");
+            }
+        },5000);
+        while (true){
+            System.out.println("我是主线程，我在睡觉");
+            Thread.sleep(500);
+        }
+    }
+}
+import java.util.concurrent.locks.Lock;
+import java.util.concurrent.locks.ReentrantLock;
+
+// TODO: 改成通知模型
+public class 精准控制线程顺序 {
+    private static Lock lock = new ReentrantLock();
+    private static String signal;
+
+    static class ARunner extends Thread {
+        @Override
+        public void run() {
+            while (true) {
+                // 申请锁
+                lock.lock();
+                while (!signal.equals("A")) {
+                    //释放掉
+                    lock.unlock();
+                    // 可能其他线程也会申请到锁，进而修改了 signal 的值
+                    Thread.yield();
+                    lock.lock();
+                }
+
+                // 这里持有锁呢
+
+                System.out.println("A 线程在运行");
+                signal = "B";
+
+                // 释放锁
+                lock.unlock();
+            }
+        }
+    }
+
+    static class BRunner extends Thread {
+        @Override
+        public void run() {
+            while (true) {
+                // 申请锁
+                lock.lock();
+                while (!signal.equals("B")) {
+                    //释放掉
+                    lock.unlock();
+                    // 可能其他线程也会申请到锁，进而修改了 signal 的值
+                    Thread.yield();
+                    lock.lock();
+                }
+
+                // 这里持有锁呢
+
+                System.out.println("B 线程在运行");
+                signal = "C";
+
+                // 释放锁
+                lock.unlock();
+            }
+        }
+    }
+    static class CRunner extends Thread {
+        @Override
+        public void run() {
+            while (true) {
+                // 申请锁
+                lock.lock();
+                while (!signal.equals("C")) {
+                    //释放掉
+                    lock.unlock();
+                    // 可能其他线程也会申请到锁，进而修改了 signal 的值
+                    Thread.yield();
+                    lock.lock();
+                }
+
+                // 这里持有锁呢
+
+                System.out.println("C 线程在运行");
+                signal = "A";
+
+                // 释放锁
+                lock.unlock();
+            }
+        }
+    }
+
+    public static void main(String[] args) throws InterruptedException {
+        Thread a = new ARunner();
+        Thread b = new BRunner();
+        Thread c = new CRunner();
+
+        signal = "C";
+
+        a.start();
+        Thread.sleep(2000);
+        b.start();
+        Thread.sleep(2000);
+        c.start();
+    }
+}
+import java.util.concurrent.BlockingQueue;
+import java.util.concurrent.LinkedBlockingQueue;
+
+public class 自定义线程池 {
+    private Thread[] threads;
+    private BlockingQueue<Runnable> taskQueue;
+
+    private static class Worker extends Thread {
+        private final BlockingQueue<Runnable> taskQueue;
+
+        Worker(BlockingQueue<Runnable> taskQueue) {
+            this.taskQueue = taskQueue;
+        }
+
+        @Override
+        public void run() {
+            try {
+                while (!Thread.interrupted()) {
+                    Runnable task = taskQueue.take();
+                    task.run();
+                }
+            } catch (InterruptedException e) {
+            }
+        }
+    }
+
+    public 自定义线程池(int nThreads) {
+        threads = new Thread[nThreads];
+        taskQueue = new LinkedBlockingQueue<>();
+        // 体现创建 nThread 个“工作线程”
+        for (int i = 0; i < nThreads; i++) {
+            Thread worker = new Worker(taskQueue);
+            worker.start();
+            threads[i] = worker;
+        }
+    }
+
+    public void execute(Runnable task) throws InterruptedException {
+        taskQueue.put(task);
+    }
+
+    public void shutdown() throws InterruptedException {
+        for (Thread thread : threads) {
+            thread.interrupt();
+        }
+
+        for (Thread thread : threads) {
+            thread.join();
+        }
+    }
+}
